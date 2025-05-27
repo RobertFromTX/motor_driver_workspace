@@ -44,6 +44,8 @@ typedef struct
 	uint16_t measured_pos;
 
 	float total_out;
+	float out_max;
+	float out_min;
 } pid_controller;
 /* USER CODE END PTD */
 
@@ -154,7 +156,7 @@ int main(void)
 
 	pid_controller motor1_controller;
 	initialize_PID(&motor1_controller, 0);
-	set_gains_PID(&motor1_controller, 0.1, 0.1, 0.1);
+	set_gains_PID(&motor1_controller, 1.5, 0.5, 0.5);
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -460,6 +462,9 @@ void initialize_PID(pid_controller *controller, uint16_t updated_measured_pos)
 	controller->Ts = 0.0001; //equates to 10kHz
 	controller->tau = 1;
 
+	controller->out_max = 600;
+	controller->out_min = -600;
+
 	controller->proportional_gain = 0;
 	controller->integral_gain = 0;
 	controller->derivative_gain = 0;
@@ -482,15 +487,61 @@ void update_PID(pid_controller *controller, uint16_t updated_measured_pos, uint1
 {
 	int16_t updated_error = set_point - updated_measured_pos;
 
-//updated the outputs of the P, I, and D components of the controller
+	//updated the outputs of the P, I, and D components of the controller
 	controller->proportional_out = controller->proportional_gain * updated_error;
 	controller->integral_out = controller->integral_gain * controller->Ts * (updated_error + controller->error) / 2.0 + controller->integral_out;
 	controller->derivative_out = ((controller->derivative_gain * 2) * (updated_measured_pos - controller->measured_pos) //
 	+ (2 * controller->tau - controller->Ts) * controller->derivative_out) / (2 * controller->tau + controller->Ts);
-//note: derivative term uses measured value instead of error term to avoid kick back
+	//note: derivative term uses measured value instead of error term to avoid kick back
 
+	//clamp integrator implementation
+	float integral_min, integral_max;
+	//determine integrator limits
+	if (controller->out_max > controller->proportional_out)
+	{
+		integral_max = controller->out_max - controller->proportional_out;
+	}
+	else
+	{
+		integral_max = 0;
+	}
+	if (controller->out_min < controller->proportional_out)
+	{
+		integral_min = controller->out_min - controller->proportional_out;
+	}
+	else
+	{
+		integral_min = 0;
+	}
+	if (updated_error == 0 && controller->error == 0) //limit integrator even more once closer to desired angle.
+	{
+		integral_max = 1;
+		integral_min = -1;
+	}
+	//clamping of integrator
+	if (controller->integral_out > integral_max)
+	{
+		controller->integral_out = 0; //setting to 0 instead of the limit to try something new
+	}
+	else if (controller->integral_out < integral_min)
+	{
+		controller->integral_out = 0;
+	}
+
+	//compute total output of controller
 	controller->total_out = controller->proportional_out + controller->integral_out - controller->derivative_out; //subtraction on derivative because its in feedback loop
-//updated the error and measured position
+
+	//limit total output of controller
+	if (controller->total_out > controller->out_max)
+	{
+		controller->total_out = controller->out_max;
+	}
+	else if (controller->total_out < controller->out_min)
+	{
+		controller->total_out = controller->out_min;
+	}
+
+	//updated the error and measured position
 	controller->error = updated_error;
 	controller->measured_pos = updated_measured_pos;
 
