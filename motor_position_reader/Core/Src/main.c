@@ -102,17 +102,17 @@ int main(void)
 	MX_ADC1_Init();
 	MX_TIM2_Init();
 	/* USER CODE BEGIN 2 */
-	if(HAL_TIM_Base_Start(&htim2) != HAL_OK)
+	if (HAL_TIM_Base_Start(&htim2) != HAL_OK)
 	{
 		Error_Handler();
 	}
 
-	if(HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) //calibrate ADC to get rid of offset error, Ex stands for extended. Special marking for function in HAL that might differ on other stm32 lines.
+	if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) //calibrate ADC to get rid of offset error, Ex stands for extended. Special marking for function in HAL that might differ on other stm32 lines.
 	{ //No Ex in HAL functions means you can easily copy code to other stm32 families.
 		Error_Handler();
 	}
 
-	if(HAL_ADC_Start_DMA(&hadc1, (uint32_t*) raw_pos_values, 2) != HAL_OK)
+	if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*) raw_pos_values, 2) != HAL_OK)
 	{
 		Error_Handler();
 	}
@@ -124,7 +124,7 @@ int main(void)
 	{
 		//The code updates the angle every 1 second, it is slow just for demo purposes. The analog output of the motor encoders will be connected to either pin A0 or A1.
 		//The angle values will be in motor1_pos and motor2_pos. Must view live expressions and add these arrays to see the angles.
-		while(!position_ready);
+		while (!position_ready);
 		position_ready = 0; //set flag back to 0
 
 		/* USER CODE END WHILE */
@@ -140,8 +140,10 @@ int main(void)
  */
 void SystemClock_Config(void)
 {
-	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+	RCC_OscInitTypeDef RCC_OscInitStruct =
+	{ 0 };
+	RCC_ClkInitTypeDef RCC_ClkInitStruct =
+	{ 0 };
 
 	/** Initializes the RCC Oscillators according to the specified parameters
 	 * in the RCC_OscInitTypeDef structure.
@@ -157,8 +159,8 @@ void SystemClock_Config(void)
 
 	/** Initializes the CPU, AHB and APB buses clocks
 	 */
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-			|RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
 	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
 	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
 	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
@@ -182,8 +184,10 @@ static void MX_ADC1_Init(void)
 
 	/* USER CODE END ADC1_Init 0 */
 
-	ADC_MultiModeTypeDef multimode = {0};
-	ADC_ChannelConfTypeDef sConfig = {0};
+	ADC_MultiModeTypeDef multimode =
+	{ 0 };
+	ADC_ChannelConfTypeDef sConfig =
+	{ 0 };
 
 	/* USER CODE BEGIN ADC1_Init 1 */
 
@@ -257,8 +261,10 @@ static void MX_TIM2_Init(void)
 
 	/* USER CODE END TIM2_Init 0 */
 
-	TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-	TIM_MasterConfigTypeDef sMasterConfig = {0};
+	TIM_ClockConfigTypeDef sClockSourceConfig =
+	{ 0 };
+	TIM_MasterConfigTypeDef sMasterConfig =
+	{ 0 };
 
 	/* USER CODE BEGIN TIM2_Init 1 */
 
@@ -324,15 +330,15 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) //once buffer is full, stop the ADC
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) //once buffer is full, stop the ADC
 {
-	for (int delay = MOTOR_HISTORY_LEN-1; delay>0; --delay) //shift all elements to right
+	for (int delay = MOTOR_HISTORY_LEN - 1; delay > 0; --delay) //shift all elements to right
 	{
-		motor1_pos[delay] = motor1_pos[delay-1];
-		motor2_pos[delay] = motor2_pos[delay-1];
+		motor1_pos[delay] = motor1_pos[delay - 1];
+		motor2_pos[delay] = motor2_pos[delay - 1];
 	}
-	motor1_pos[0] = raw_pos_values[0]*0.08789; //multiply by 360/4096 to convert ADC steps to angle in degrees
-	motor2_pos[0] = raw_pos_values[1]*0.08789;
+	motor1_pos[0] = raw_pos_values[0] * 0.08789; //multiply by 360/4096 to convert ADC steps to angle in degrees
+	motor2_pos[0] = raw_pos_values[1] * 0.08789;
 
 	position_ready = 1; //signal to main loop that adc data ready
 }
@@ -355,17 +361,17 @@ void Error_Handler(void)
 
 #ifdef  USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-	/* USER CODE BEGIN 6 */
+  /* USER CODE BEGIN 6 */
 	/* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-	/* USER CODE END 6 */
+  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
