@@ -87,6 +87,7 @@ static void MX_TIM2_Init(void);
 void initialize_PID(pid_controller *controller, uint16_t updated_measured_pos);
 void set_gains_PID(pid_controller *controller, float Kp, float Ki, float Kd);
 void update_PID(pid_controller *controller, uint16_t updated_measured_pos, uint16_t set_point);
+void update_motor_input(int16_t new_out, uint32_t **active_buffer, uint32_t **inactive_buffer);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -132,12 +133,11 @@ int main(void)
 	//Initialize PWM
 	//creating two buffers for a single motor. When changing speed, can update the inactive buffer and swap it with the active buffer
 	//to avoid two devices trying to write to the same buffer.
-	volatile uint32_t bufferA = 150; //out of 999, determines on time of PWM signal
+	volatile uint32_t bufferA = 400; //out of 999, determines on time of PWM signal
 	volatile uint32_t bufferB = 750;
 	volatile uint32_t *active_buffer = &bufferA;
 	volatile uint32_t *inactive_buffer = &bufferB;
 	HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1, (uint32_t*) active_buffer, 1); //send the pulse to the timer peripheral, which determines duty cycle
-
 	//Initialize ADC
 	if (HAL_TIM_Base_Start(&htim2) != HAL_OK)
 	{
@@ -156,7 +156,7 @@ int main(void)
 
 	pid_controller motor1_controller;
 	initialize_PID(&motor1_controller, 0);
-	set_gains_PID(&motor1_controller, 1.5, 0.5, 0.5);
+	set_gains_PID(&motor1_controller, 6, 30, 10);
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -169,7 +169,7 @@ int main(void)
 		position_ready = 0;	//set flag back to 0
 		uint16_t motor_position1 = motor1_pos[0];
 		update_PID(&motor1_controller, motor_position1, 15);
-
+		update_motor_input((int16_t) motor1_controller.total_out, &active_buffer, &inactive_buffer);
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -445,11 +445,24 @@ static void MX_DMA_Init(void)
  */
 static void MX_GPIO_Init(void)
 {
+	GPIO_InitTypeDef GPIO_InitStruct =
+	{ 0 };
 	/* USER CODE BEGIN MX_GPIO_Init_1 */
 	/* USER CODE END MX_GPIO_Init_1 */
 
 	/* GPIO Ports Clock Enable */
 	__HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+
+	/*Configure GPIO pin Output Level */
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4 | GPIO_PIN_5, GPIO_PIN_RESET);
+
+	/*Configure GPIO pins : PB4 PB5 */
+	GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 	/* USER CODE BEGIN MX_GPIO_Init_2 */
 	/* USER CODE END MX_GPIO_Init_2 */
@@ -460,7 +473,7 @@ void initialize_PID(pid_controller *controller, uint16_t updated_measured_pos)
 {
 
 	controller->Ts = 0.0001; //equates to 10kHz
-	controller->tau = 1;
+	controller->tau = 10;
 
 	controller->out_max = 600;
 	controller->out_min = -600;
@@ -485,12 +498,34 @@ void set_gains_PID(pid_controller *controller, float Kp, float Ki, float Kd)
 }
 void update_PID(pid_controller *controller, uint16_t updated_measured_pos, uint16_t set_point)
 {
+	int16_t adjusted_measured_pos = updated_measured_pos;
+	int16_t adjusted_prev_pos = controller->measured_pos;
+
 	int16_t updated_error = set_point - updated_measured_pos;
 
+	if (updated_measured_pos > set_point + 180 && set_point < 90)
+	{
+		adjusted_measured_pos = adjusted_measured_pos - 361;
+	}
+	else if (updated_measured_pos > set_point - 180 && set_point > 300)
+	{
+		adjusted_measured_pos = adjusted_measured_pos + 361;
+	}
+	if (controller->measured_pos > set_point + 180 && set_point < 90)
+	{
+		adjusted_prev_pos = adjusted_prev_pos - 361;
+	}
+	else if (controller->measured_pos > set_point - 180 && set_point > 300)
+	{
+		adjusted_prev_pos = adjusted_prev_pos + 361;
+	}
+	int16_t position_difference = adjusted_measured_pos - adjusted_prev_pos;
+
+	updated_error = set_point - adjusted_measured_pos;
 	//updated the outputs of the P, I, and D components of the controller
 	controller->proportional_out = controller->proportional_gain * updated_error;
 	controller->integral_out = controller->integral_gain * controller->Ts * (updated_error + controller->error) / 2.0 + controller->integral_out;
-	controller->derivative_out = ((controller->derivative_gain * 2) * (updated_measured_pos - controller->measured_pos) //
+	controller->derivative_out = ((controller->derivative_gain * 2) * (position_difference) //
 	+ (2 * controller->tau - controller->Ts) * controller->derivative_out) / (2 * controller->tau + controller->Ts);
 	//note: derivative term uses measured value instead of error term to avoid kick back
 
@@ -513,23 +548,30 @@ void update_PID(pid_controller *controller, uint16_t updated_measured_pos, uint1
 	{
 		integral_min = 0;
 	}
-	if (updated_error == 0 && controller->error == 0) //limit integrator even more once closer to desired angle.
+
+	//get absolute error
+	int16_t absval_error = controller->error;
+	if (absval_error < 0)
 	{
-		integral_max = 1;
-		integral_min = -1;
+		absval_error = -1 * absval_error;
+	}
+	if (absval_error < 30) //limit integrator even more once closer to desired angle.
+	{
+		integral_max = 220;
+		integral_min = -220;
 	}
 	//clamping of integrator
 	if (controller->integral_out > integral_max)
 	{
-		controller->integral_out = 0; //setting to 0 instead of the limit to try something new
+		controller->integral_out = integral_max;
 	}
 	else if (controller->integral_out < integral_min)
 	{
-		controller->integral_out = 0;
+		controller->integral_out = integral_min;
 	}
 
 	//compute total output of controller
-	controller->total_out = controller->proportional_out + controller->integral_out - controller->derivative_out; //subtraction on derivative because its in feedback loop
+	controller->total_out = controller->proportional_out + controller->integral_out + controller->derivative_out;
 
 	//limit total output of controller
 	if (controller->total_out > controller->out_max)
@@ -544,6 +586,27 @@ void update_PID(pid_controller *controller, uint16_t updated_measured_pos, uint1
 	//updated the error and measured position
 	controller->error = updated_error;
 	controller->measured_pos = updated_measured_pos;
+
+}
+void update_motor_input(int16_t new_out, uint32_t **active_buffer_address, uint32_t **inactive_buffer_address)
+{
+	if (new_out > 0)
+	{
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+
+	}
+	else if (new_out < 0)
+	{
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+		new_out = new_out * -1;
+	}
+
+	**inactive_buffer_address = new_out;
+	uint32_t *temp_uint32_address = *active_buffer_address;
+	*active_buffer_address = *inactive_buffer_address;
+	*inactive_buffer_address = temp_uint32_address;
 
 }
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) //once buffer is full, stop the ADC
@@ -577,17 +640,17 @@ void Error_Handler(void)
 
 #ifdef  USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
+	/* USER CODE BEGIN 6 */
+	/* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
+	/* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

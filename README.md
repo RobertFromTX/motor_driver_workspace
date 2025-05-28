@@ -14,4 +14,10 @@ The project can be used to read all of the registers on the chip, but I mainly u
 and 3.3V depending on the angle the encoder records. 
 
 ### Motor Position Reader
-This module reads the positions of two motors, and stores their angles in two arrays, motor1_pos and motor2_pos. These arrays store the last 3 angles recorded so that digital PID controllers can be implemented for them. A timer (TIM2) generates an trigger output (TRGO) signal every second, which gets the ADC on the stm32 to sample and convert the analog signal from the motor encoder output (which are connected to pins A0 and A1) into a digital value. The ADC works with the DMA so that fewer clock cycles are spent retrieving the position.
+This module reads the positions of two motors, and stores their angles (degrees) in two arrays, motor1_pos and motor2_pos. These arrays store the last 3 angles recorded so that digital PID controllers can be implemented for them. A timer (TIM2) generates an trigger output (TRGO) signal every second, which gets the ADC on the stm32 to sample and convert the analog signal from the motor encoder output (which are connected to pins A0 and A1) into a digital value. The ADC works with the DMA so that fewer clock cycles are spent retrieving the position.
+
+### Motor PWM 
+Generates 1 KHz PWM signal, using timer in PWM mode, and outputs it to pin D9. The period is 999 cycles of the timer. The pulse can be between 0 and 999, and the user can set this to choose the duty cycle.
+
+### Motor PID
+Uses the fundamentals of the previous 3 projects to realize a PID controller for motor position. 
