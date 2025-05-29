@@ -156,8 +156,8 @@ int main(void)
 
 	pid_controller motor1_controller;
 	initialize_PID(&motor1_controller, 0);
-	// set_gains_PID(&motor1_controller, 6, 30, 10); //RED MOTOR
-	set_gains_PID(&motor1_controller, 12, 600, .02); //YELLOW MOTOR
+	set_gains_PID(&motor1_controller, 6, 200, .015); //RED MOTOR (also works for yellow but less aggressive)
+	//set_gains_PID(&motor1_controller, 12, 600, .02); //YELLOW MOTOR
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -169,7 +169,7 @@ int main(void)
 		while (!position_ready);
 		position_ready = 0;	//set flag back to 0
 		uint16_t motor_position1 = motor1_pos[0];
-		update_PID(&motor1_controller, motor_position1, 270);
+		update_PID(&motor1_controller, motor_position1, 180);
 		update_motor_input((int16_t) motor1_controller.total_out, &active_buffer, &inactive_buffer);
 		/* USER CODE END WHILE */
 
@@ -564,11 +564,13 @@ void update_PID(pid_controller *controller, uint16_t updated_measured_pos, uint1
 
 	if (absval_error < 30) //limit integrator even more once closer to desired angle.
 	{
-//		integral_max = 220; //RED MOTOR
-//		integral_min = -220;
-
-		integral_max = 340; //YELLOW MOTOR
+		integral_max = 340;
 		integral_min = -340;
+	}
+	if (absval_error < 10) //limit integrator even more once closer to desired angle.
+	{
+		integral_max = 320; //RED MOTOR
+		integral_min = -320;
 	}
 	//clamping of integrator
 	if (controller->integral_out > integral_max)
