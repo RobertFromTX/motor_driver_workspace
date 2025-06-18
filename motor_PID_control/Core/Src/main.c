@@ -154,10 +154,12 @@ int main(void)
 		Error_Handler();
 	}
 
+	//initialize PID controller
 	pid_controller motor1_controller;
 	initialize_PID(&motor1_controller, 0);
 	set_gains_PID(&motor1_controller, 6, 200, .015); //RED MOTOR (also works for yellow but less aggressive)
 	//set_gains_PID(&motor1_controller, 12, 600, .02); //YELLOW MOTOR
+
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -621,7 +623,7 @@ void update_motor_input(int16_t new_out, uint32_t **active_buffer_address, uint3
 	*inactive_buffer_address = temp_uint32_address;
 
 }
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) //once buffer is full, stop the ADC
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) //once buffer that stores angular position data from motor encoder is full, stop the ADC and run this action
 {
 	for (int delay = MOTOR_HISTORY_LEN - 1; delay > 0; --delay) //shift all elements to right
 	{
